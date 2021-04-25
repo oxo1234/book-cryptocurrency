@@ -1,6 +1,6 @@
 import sys
 import time
-import pybithumb
+import pyupbit
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QTableWidgetItem, QProgressBar
@@ -16,17 +16,18 @@ class OrderbookWorker(QThread):
 
     def run(self):
         while self.alive:
-            data  = pybithumb.get_orderbook(self.ticker, limit=10)
-            time.sleep(0.05)
+            # data  = pyupbit.get_orderbook(self.ticker, limit=10)
+            data = pyupbit.get_orderbook(self.ticker)
+            time.sleep(0.5)
             if data != None:
-                self.dataSent.emit(data)
+                self.dataSent.emit(data[0])
 
     def close(self):
         self.alive = False
 
 
 class OrderbookWidget(QWidget):
-    def __init__(self, parent=None, ticker="BTC"):
+    def __init__(self, parent=None, ticker="KRW-BTC"):
         super().__init__(parent)
         uic.loadUi("resource/orderbook.ui", self)
         self.ticker = ticker
@@ -80,23 +81,42 @@ class OrderbookWidget(QWidget):
         self.ow.start()
 
     def updateData(self, data):
-        tradingValues = [ ]
-        for v in data['bids']:
-            tradingValues.append(int(v['price'] * v['quantity']))
+
+        tradingValues = []
+        for i in data['orderbook_units'][:10]:
+            tradingValues.append(i['ask_price'] * i['ask_size'])
+            tradingValues.append(i['bid_price'] * i['bid_size'])
         maxtradingValue = max(tradingValues)
 
-        for i, v in enumerate(data['asks'][::-1]):
+        for i, v in enumerate(data['orderbook_units'][:10]):
+            print(str(i)+' : '+str(v))
             item_0 = self.tableAsks.item(i, 0)
-            item_0.setText(f"{v['price']:,}")
+            item_0.setText(f"{v['ask_price']:,}")
             item_1 = self.tableAsks.item(i, 1)
-            item_1.setText(f"{v['quantity']:,}")
+            item_1.setText(f"{v['ask_size']:,}")
             item_2 = self.tableAsks.cellWidget(i, 2)
-            item_2.setRange(0, maxtradingValue)
-            item_2.setFormat(f"{tradingValues[i]:,}")
+            item_2.setRange(0, int(maxtradingValue))
+            ask_amt = v['ask_price'] * v['ask_size']
+            item_2.setFormat(f"{ask_amt}")
+            # item_2.setFormat(f"{tradingValues[i]:,}")
             self.asksAnim[i].setStartValue(item_2.value() if item_2.value() > 0 else 0)
             self.asksAnim[i].setEndValue(tradingValues[i])
             self.asksAnim[i].start()
 
+            item_0 = self.tableBids.item(i, 0)
+            item_0.setText(f"{v['bid_price']:,}")
+            item_1 = self.tableBids.item(i, 1)
+            item_1.setText(f"{v['bid_size']:,}")
+            item_2 = self.tableBids.cellWidget(i, 2)
+            item_2.setRange(0, maxtradingValue)
+            bid_amt = v['bid_price'] * v['bid_size']
+            item_2.setFormat(f"{bid_amt}")
+            self.bidsAnim[i].setStartValue(item_2.value() if item_2.value() > 0 else 0)
+            self.bidsAnim[i].setEndValue(tradingValues[i])
+            self.bidsAnim[i].start()
+
+        '''
+        # ORIGIN
         for i, v in enumerate(data['bids']):
             item_0 = self.tableBids.item(i, 0)
             item_0.setText(f"{v['price']:,}")
@@ -108,11 +128,10 @@ class OrderbookWidget(QWidget):
             self.bidsAnim[i].setStartValue(item_2.value() if item_2.value() > 0 else 0)
             self.bidsAnim[i].setEndValue(tradingValues[i])
             self.bidsAnim[i].start()
-
+        '''
 
     def closeEvent(self, event):
         self.ow.close()
-
 
 if __name__ == "__main__":
     import sys
